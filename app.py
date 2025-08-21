@@ -8,6 +8,8 @@ from playwright.sync_api import sync_playwright
 import json
 import os
 from datetime import datetime
+import subprocess
+import sys
 
 # Set page config
 st.set_page_config(
@@ -16,6 +18,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Install Playwright browsers if not already installed
+def install_playwright_browsers():
+    """Install Playwright browsers if not already present"""
+    try:
+        # Check if browsers are already installed
+        with sync_playwright() as p:
+            # This will fail if browsers aren't installed
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+        return True
+    except:
+        # Install browsers
+        st.info("Installing Playwright browsers. This may take a few minutes...")
+        result = subprocess.run([
+            sys.executable, 
+            "-m", 
+            "playwright", 
+            "install", 
+            "chromium"
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            st.success("Playwright browsers installed successfully!")
+            return True
+        else:
+            st.error(f"Failed to install browsers: {result.stderr}")
+            return False
 
 # Define the state
 class AgentState(dict):
@@ -30,7 +60,7 @@ class AgentState(dict):
 def login_to_linkedin(page, email, password):
     """Login to LinkedIn"""
     try:
-        page.goto("https://www.linkedin.com/login")
+        page.goto("https://www.linkedin.com/login", timeout=60000)
         page.fill("#username", email)
         page.fill("#password", password)
         page.click("button[type=submit]")
@@ -44,7 +74,7 @@ def login_to_linkedin(page, email, password):
 def is_connected(page, profile_url):
     """Check if already connected to the profile"""
     try:
-        page.goto(profile_url)
+        page.goto(profile_url, timeout=60000)
         time.sleep(3)
         
         # Check for "Message" button (indicates connection)
@@ -65,7 +95,7 @@ def is_connected(page, profile_url):
 def send_message(page, profile_url, message):
     """Send message to a connected profile"""
     try:
-        page.goto(profile_url)
+        page.goto(profile_url, timeout=60000)
         time.sleep(3)
         
         # Click message button
@@ -95,7 +125,7 @@ def send_message(page, profile_url, message):
 def send_connection_request(page, profile_url, message):
     """Send connection request with note"""
     try:
-        page.goto(profile_url)
+        page.goto(profile_url, timeout=60000)
         time.sleep(3)
         
         # Click connect button
@@ -241,6 +271,9 @@ def init_session_state():
         st.session_state.results = []
     if 'processing' not in st.session_state:
         st.session_state.processing = False
+    if 'browsers_installed' not in st.session_state:
+        # Install browsers on first run
+        st.session_state.browsers_installed = install_playwright_browsers()
 
 # UI Components
 def sidebar():
@@ -297,7 +330,7 @@ def sidebar():
 
 def initialize_browser():
     """Initialize the browser instance"""
-    if st.session_state.browser is None:
+    if st.session_state.browser is None and st.session_state.browsers_installed:
         try:
             st.session_state.playwright = sync_playwright().start()
             # Use headless mode for cloud deployment
@@ -333,6 +366,11 @@ def logout():
 def main_interface():
     """Main content area"""
     st.header("LinkedIn Message Sender")
+    
+    # Check if browsers are installed
+    if not st.session_state.browsers_installed:
+        st.error("Playwright browsers could not be installed. Please check the logs.")
+        return
     
     # Check if credentials are available
     if not st.session_state.email or not st.session_state.password:
