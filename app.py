@@ -212,9 +212,23 @@ def create_workflow():
 # Initialize session state
 def init_session_state():
     if 'email' not in st.session_state:
-        st.session_state.email = ""
+        # Get email from secrets or environment variable
+        if 'LINKEDIN_EMAIL' in st.secrets:
+            st.session_state.email = st.secrets['LINKEDIN_EMAIL']
+        elif 'LINKEDIN_EMAIL' in os.environ:
+            st.session_state.email = os.environ['LINKEDIN_EMAIL']
+        else:
+            st.session_state.email = ""
+    
     if 'password' not in st.session_state:
-        st.session_state.password = ""
+        # Get password from secrets or environment variable
+        if 'LINKEDIN_PASSWORD' in st.secrets:
+            st.session_state.password = st.secrets['LINKEDIN_PASSWORD']
+        elif 'LINKEDIN_PASSWORD' in os.environ:
+            st.session_state.password = os.environ['LINKEDIN_PASSWORD']
+        else:
+            st.session_state.password = ""
+            
     if 'page' not in st.session_state:
         st.session_state.page = None
     if 'browser' not in st.session_state:
@@ -235,22 +249,24 @@ def sidebar():
         st.title("LinkedIn Message Sender")
         st.markdown("---")
         
-        st.subheader("Login Details")
-        email = st.text_input("Email", value=st.session_state.email, type="default")
-        password = st.text_input("Password", value=st.session_state.password, type="password")
+        st.subheader("Login Status")
         
-        if st.button("Login to LinkedIn"):
-            if email and password:
-                st.session_state.email = email
-                st.session_state.password = password
+        # Check if credentials are available
+        credentials_available = st.session_state.email and st.session_state.password
+        
+        if credentials_available:
+            st.success("✅ Credentials loaded from secrets")
+            
+            if st.button("Login to LinkedIn"):
                 initialize_browser()
-                if login_to_linkedin(st.session_state.page, email, password):
+                if login_to_linkedin(st.session_state.page, st.session_state.email, st.session_state.password):
                     st.session_state.logged_in = True
                     st.success("Logged in successfully!")
                 else:
                     st.error("Login failed. Please check your credentials.")
-            else:
-                st.error("Please enter both email and password")
+        else:
+            st.error("❌ Credentials not found")
+            st.info("Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in Streamlit secrets")
         
         if st.session_state.logged_in:
             st.success("✅ Logged in to LinkedIn")
@@ -260,12 +276,23 @@ def sidebar():
         st.markdown("---")
         st.subheader("Instructions")
         st.markdown("""
-        1. Enter your LinkedIn credentials
+        1. Set your LinkedIn credentials in Streamlit secrets
         2. Login to LinkedIn
         3. Add profiles and messages in the main area
         4. Click 'Start Sending Messages'
         
         **Note:** Use this tool responsibly and comply with LinkedIn's Terms of Service.
+        """)
+        
+        st.markdown("---")
+        st.subheader("Secrets Management")
+        st.markdown("""
+        Add these to your Streamlit secrets (`.streamlit/secrets.toml`):
+        
+        ```toml
+        LINKEDIN_EMAIL = "your_email@example.com"
+        LINKEDIN_PASSWORD = "your_password"
+        ```
         """)
 
 def initialize_browser():
@@ -273,7 +300,19 @@ def initialize_browser():
     if st.session_state.browser is None:
         try:
             st.session_state.playwright = sync_playwright().start()
-            st.session_state.browser = st.session_state.playwright.chromium.launch(headless=False)
+            # Use headless mode for cloud deployment
+            st.session_state.browser = st.session_state.playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ]
+            )
             st.session_state.page = st.session_state.browser.new_page()
         except Exception as e:
             st.error(f"Failed to initialize browser: {str(e)}")
@@ -294,6 +333,22 @@ def logout():
 def main_interface():
     """Main content area"""
     st.header("LinkedIn Message Sender")
+    
+    # Check if credentials are available
+    if not st.session_state.email or not st.session_state.password:
+        st.error("LinkedIn credentials not found. Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in Streamlit secrets.")
+        st.info("""
+        To set up secrets:
+        1. Go to your app in Streamlit Cloud
+        2. Click on the three dots (⋮) next to the app
+        3. Select "Settings" → "Secrets"
+        4. Add your credentials:
+        ```
+        LINKEDIN_EMAIL = "your_email@example.com"
+        LINKEDIN_PASSWORD = "your_password"
+        ```
+        """)
+        return
     
     # Input area for profiles and messages
     col1, col2 = st.columns(2)
@@ -370,11 +425,22 @@ def process_messages():
     """Process all messages in the queue"""
     app = create_workflow()
     
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    total = len([r for r in st.session_state.results if r['status'] == 'Pending'])
+    processed = 0
+    
     for i, result in enumerate(st.session_state.results):
         if result['status'] == 'Pending':
             # Update status to processing
             st.session_state.results[i]['status'] = 'Processing'
-            st.rerun()
+            
+            # Update progress
+            processed += 1
+            progress = processed / total
+            progress_bar.progress(progress)
+            status_text.text(f"Processing {processed} of {total}: {result['url']}")
             
             # Add random delay to appear more human
             time.sleep(random.randint(2, 5))
@@ -396,8 +462,11 @@ def process_messages():
                 st.session_state.results[i]['result'] = f"Error: {str(e)}"
                 st.session_state.results[i]['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
+            # Rerun to update UI
             st.rerun()
     
+    progress_bar.empty()
+    status_text.empty()
     st.session_state.processing = False
     st.success("All messages processed!")
 
@@ -406,8 +475,8 @@ def main():
     init_session_state()
     sidebar()
     
-    if not st.session_state.logged_in:
-        st.warning("Please login to LinkedIn using the sidebar to get started.")
+    if not st.session_state.logged_in and st.session_state.email and st.session_state.password:
+        st.info("Click 'Login to LinkedIn' in the sidebar to get started.")
     
     main_interface()
 
