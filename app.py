@@ -19,49 +19,49 @@ st.set_page_config(
 )
 
 # Install Playwright browsers if not already installed
-def install_playwright_browsers():
-    """Install Playwright browsers and dependencies"""
-    try:
-        # Install browsers with system dependencies
-        st.info("Installing Playwright dependencies. This may take a few minutes...")
+# def install_playwright_browsers():
+#     """Install Playwright browsers and dependencies"""
+#     try:
+#         # Install browsers with system dependencies
+#         st.info("Installing Playwright dependencies. This may take a few minutes...")
         
-        # Install Playwright with the Python package
-        result = subprocess.run([
-            sys.executable, 
-            "-m", 
-            "playwright", 
-            "install", 
-            "chromium",
-            "--with-deps"
-        ], capture_output=True, text=True, timeout=300)
+#         # Install Playwright with the Python package
+#         result = subprocess.run([
+#             sys.executable, 
+#             "-m", 
+#             "playwright", 
+#             "install", 
+#             "chromium",
+#             "--with-deps"
+#         ], capture_output=True, text=True, timeout=300)
         
-        if result.returncode == 0:
-            st.success("Playwright installed successfully!")
-            return True
-        else:
-            # Fallback to regular installation if with-deps fails
-            st.warning("Trying alternative installation method...")
-            result = subprocess.run([
-                sys.executable, 
-                "-m", 
-                "playwright", 
-                "install", 
-                "chromium"
-            ], capture_output=True, text=True, timeout=300)
+#         if result.returncode == 0:
+#             st.success("Playwright installed successfully!")
+#             return True
+#         else:
+#             # Fallback to regular installation if with-deps fails
+#             st.warning("Trying alternative installation method...")
+#             result = subprocess.run([
+#                 sys.executable, 
+#                 "-m", 
+#                 "playwright", 
+#                 "install", 
+#                 "chromium"
+#             ], capture_output=True, text=True, timeout=300)
             
-            if result.returncode == 0:
-                st.success("Playwright browsers installed successfully!")
-                return True
-            else:
-                st.error(f"Failed to install browsers: {result.stderr}")
-                return False
+#             if result.returncode == 0:
+#                 st.success("Playwright browsers installed successfully!")
+#                 return True
+#             else:
+#                 st.error(f"Failed to install browsers: {result.stderr}")
+#                 return False
                 
-    except subprocess.TimeoutExpired:
-        st.error("Installation timed out. Please try again.")
-        return False
-    except Exception as e:
-        st.error(f"Installation failed: {str(e)}")
-        return False
+#     except subprocess.TimeoutExpired:
+#         st.error("Installation timed out. Please try again.")
+#         return False
+#     except Exception as e:
+#         st.error(f"Installation failed: {str(e)}")
+#         return False
 # Define the state
 class AgentState(dict):
     def __init__(self, linkedin_url, message, status="", result=""):
