@@ -321,10 +321,8 @@ def init_session_state():
         st.session_state.results = []
     if 'processing' not in st.session_state:
         st.session_state.processing = False
-    if 'browsers_installed' not in st.session_state:
-        # No need to install browsers with Docker approach
-        st.session_state.browsers_installed = True
-    
+    # Remove browsers_installed check as it's handled by Docker
+
 # UI Components
 def sidebar():
     """Create the sidebar with login form"""
@@ -362,64 +360,30 @@ def sidebar():
         
 # Replace your browser initialization with this
 def initialize_browser():
-    """Initialize the browser instance"""
+    """Initialize the browser instance using Playwright's built-in Chromium"""
     try:
         # Start Playwright
         if st.session_state.playwright is None:
             st.session_state.playwright = sync_playwright().start()
         
-        # Try to launch Chrome with various approaches
-        browser_args = [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--single-process'
-        ]
-        
-        # Try different Chrome executable paths
-        chrome_paths = [
-            "/usr/bin/google-chrome-stable",  # Standard Chrome installation
-            "/usr/bin/google-chrome",         # Alternative path
-            "/usr/bin/chromium-browser",      # Chromium browser
-            "/usr/bin/chromium"               # Another Chromium path
-        ]
-        
-        browser = None
-        for chrome_path in chrome_paths:
-            try:
-                browser = st.session_state.playwright.chromium.launch(
-                    headless=True,
-                    executable_path=chrome_path,
-                    args=browser_args
-                )
-                st.session_state.browser = browser
-                st.session_state.page = browser.new_page()
-                st.success(f"Browser initialized with {chrome_path}")
-                return True
-            except Exception as e:
-                st.warning(f"Failed with {chrome_path}: {str(e)}")
-                continue
-        
-        # If all else fails, try without specifying executable path
-        try:
-            browser = st.session_state.playwright.chromium.launch(
-                headless=True,
-                args=browser_args
-            )
-            st.session_state.browser = browser
-            st.session_state.page = browser.new_page()
-            st.success("Browser initialized with default path")
-            return True
-        except Exception as e:
-            st.error(f"All browser initialization attempts failed: {str(e)}")
-            return False
-            
+        # Use Playwright's built-in Chromium
+        st.session_state.browser = st.session_state.playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--single-process'
+            ]
+        )
+        st.session_state.page = st.session_state.browser.new_page()
+        return True
     except Exception as e:
-        st.error(f"Failed to initialize Playwright: {str(e)}")
+        st.error(f"Failed to initialize browser: {str(e)}")
         return False
 
 def logout():
@@ -570,6 +534,32 @@ def process_messages():
     st.session_state.processing = False
     st.success("All messages processed!")
 
+
+def debug_browser_installation():
+    """Debug function to check browser installation"""
+    try:
+        # Check if Playwright browsers are installed
+        result = subprocess.run([
+            sys.executable, 
+            "-m", 
+            "playwright",
+            "install",
+            "--dry-run",
+            "chromium"
+        ], capture_output=True, text=True)
+        
+        st.write("Playwright browser check:", result.stdout)
+        
+        # Try to list browser executables
+        try:
+            from playwright._impl._driver import compute_driver_executable
+            driver_path = compute_driver_executable()
+            st.write(f"Driver path: {driver_path}")
+        except Exception as e:
+            st.write(f"Could not get driver path: {e}")
+            
+    except Exception as e:
+        st.write(f"Debug failed: {e}")
 # Main app
 def main():
     init_session_state()
