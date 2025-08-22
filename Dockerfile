@@ -26,19 +26,18 @@ RUN apt-get update && \
     libxtst6 \
     libxss1 \
     wget \
-    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and browsers
-RUN pip install playwright && \
-    playwright install chromium
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright and its Chromium browser
+RUN playwright install chromium
 
 # Copy your application code
 COPY . /app
 WORKDIR /app
-
-# Install Python dependencies
-RUN pip install -r requirements.txt
 
 # Expose the port Streamlit will run on
 EXPOSE 8501
