@@ -362,30 +362,76 @@ def sidebar():
         
 # Replace your browser initialization with this
 def initialize_browser():
-    """Initialize the browser instance using Playwright's built-in Chromium"""
+    """Initialize the browser instance with proper path handling"""
     try:
         # Start Playwright
         if st.session_state.playwright is None:
             st.session_state.playwright = sync_playwright().start()
         
-        # Use Playwright's built-in Chromium
-        st.session_state.browser = st.session_state.playwright.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
-                '--single-process'
-            ]
-        )
+        # Try to find the browser executable
+        browser_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--single-process'
+        ]
+        
+        # Try multiple approaches to launch the browser
+        try:
+            # First try: Use Playwright's built-in browser
+            st.session_state.browser = st.session_state.playwright.chromium.launch(
+                headless=True,
+                args=browser_args
+            )
+        except Exception as e:
+            st.warning(f"First attempt failed: {str(e)}")
+            
+            # Second try: Manually install browser and try again
+            try:
+                st.info("Attempting to install browser...")
+                import subprocess
+                result = subprocess.run([
+                    sys.executable, 
+                    "-m", 
+                    "playwright", 
+                    "install", 
+                    "chromium"
+                ], capture_output=True, text=True, timeout=300)
+                
+                if result.returncode == 0:
+                    st.session_state.browser = st.session_state.playwright.chromium.launch(
+                        headless=True,
+                        args=browser_args
+                    )
+                else:
+                    raise Exception(f"Browser installation failed: {result.stderr}")
+            except Exception as install_error:
+                st.error(f"Browser installation also failed: {str(install_error)}")
+                return False
+        
+        # Create a new page
         st.session_state.page = st.session_state.browser.new_page()
         return True
+        
     except Exception as e:
         st.error(f"Failed to initialize browser: {str(e)}")
+        return False
+
+
+def check_browser_installation():
+    """Check if browser is properly installed"""
+    try:
+        # Try to launch browser to check installation
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+        return True
+    except Exception as e:
+        st.error(f"Browser check failed: {str(e)}")
         return False
 
 def logout():
@@ -564,12 +610,17 @@ def debug_browser_installation():
 # Main app
 def main():
     init_session_state()
+    
+    # Check browser installation
+    if not check_browser_installation():
+        st.error("Browser is not properly installed. Please check your Docker setup.")
+        return
+    
     sidebar()
     
     if not st.session_state.logged_in and st.session_state.email and st.session_state.password:
         st.info("Click 'Login to LinkedIn' in the sidebar to get started.")
     
     main_interface()
-
 if __name__ == "__main__":
     main()
