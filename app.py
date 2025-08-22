@@ -73,19 +73,54 @@ class AgentState(dict):
 
 # LinkedIn interaction functions
 def login_to_linkedin(page, email, password):
-    """Login to LinkedIn"""
+    """Login to LinkedIn with robust error handling"""
     try:
-        page.goto("https://www.linkedin.com/login", timeout=60000)
+        # Navigate to LinkedIn login page
+        page.goto("https://www.linkedin.com/login", timeout=120000)
+        
+        # Wait for page to load
+        page.wait_for_selector("#username", timeout=30000)
+        
+        # Fill in credentials
         page.fill("#username", email)
         page.fill("#password", password)
+        
+        # Click login button
         page.click("button[type=submit]")
-        page.wait_for_selector("nav.global-nav", timeout=60000)
-        time.sleep(3)
-        return True
+        
+        # Wait for login to complete (check for feed or login error)
+        try:
+            # Wait for either successful login or error
+            page.wait_for_selector("nav.global-nav, div.alert-error", timeout=60000)
+            
+            # Check if login was successful
+            if page.query_selector("nav.global-nav"):
+                time.sleep(3)  # Additional wait for page to stabilize
+                return True
+            else:
+                # Check for error message
+                error_element = page.query_selector("div.alert-error")
+                if error_element:
+                    error_text = error_element.inner_text()
+                    st.error(f"Login failed: {error_text}")
+                else:
+                    st.error("Login failed: Unknown error")
+                return False
+                
+        except Exception as e:
+            st.error(f"Login timeout or error: {str(e)}")
+            # Take screenshot for debugging
+            try:
+                page.screenshot(path="/tmp/login_error.png")
+                st.error("Screenshot saved to /tmp/login_error.png")
+            except:
+                pass
+            return False
+            
     except Exception as e:
-        st.error(f"Login failed: {str(e)}")
+        st.error(f"Login navigation failed: {str(e)}")
         return False
-
+        
 def is_connected(page, profile_url):
     """Check if already connected to the profile"""
     try:
@@ -256,12 +291,6 @@ def create_workflow():
 
 # Initialize session state
 def init_session_state():
-    
-    if 'browsers_installed' not in st.session_state:
-    # Just try to install without complex checks
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], capture_output=True)
-        st.session_state.browsers_installed = True
-    
     if 'email' not in st.session_state:
         # Get email from secrets or environment variable
         if 'LINKEDIN_EMAIL' in st.secrets:
@@ -293,9 +322,9 @@ def init_session_state():
     if 'processing' not in st.session_state:
         st.session_state.processing = False
     if 'browsers_installed' not in st.session_state:
-        # Install browsers on first run
-        st.session_state.browsers_installed = install_playwright_browsers()
-
+        # No need to install browsers with Docker approach
+        st.session_state.browsers_installed = True
+    
 # UI Components
 def sidebar():
     """Create the sidebar with login form"""
@@ -312,12 +341,15 @@ def sidebar():
             st.success(" Credentials loaded from secrets")
             
             if st.button("Login to LinkedIn"):
-                initialize_browser()
-                if login_to_linkedin(st.session_state.page, st.session_state.email, st.session_state.password):
-                    st.session_state.logged_in = True
-                    st.success("Logged in successfully!")
-                else:
-                    st.error("Login failed. Please check your credentials.")
+                with st.spinner("Initializing browser..."):
+                    if initialize_browser():
+                        if login_to_linkedin(st.session_state.page, st.session_state.email, st.session_state.password):
+                            st.session_state.logged_in = True
+                            st.success("Logged in successfully!")
+                        else:
+                            st.error("Login failed. Please check your credentials.")
+                    else:
+                        st.error("Browser initialization failed")
         else:
             st.error(" Credentials not found")
             st.info("Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in Streamlit secrets")
@@ -325,38 +357,70 @@ def sidebar():
         if st.session_state.logged_in:
             st.success(" Logged in to LinkedIn")
             if st.button("Logout"):
-                logout()
-        
+                logout()        
  
         
 # Replace your browser initialization with this
 def initialize_browser():
     """Initialize the browser instance"""
-    if st.session_state.browser is None and st.session_state.browsers_installed:
-        try:
+    try:
+        # Start Playwright
+        if st.session_state.playwright is None:
             st.session_state.playwright = sync_playwright().start()
-            
-            # Use Playwright's Chromium
-            st.session_state.browser = st.session_state.playwright.chromium.launch(
+        
+        # Try to launch Chrome with various approaches
+        browser_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--single-process'
+        ]
+        
+        # Try different Chrome executable paths
+        chrome_paths = [
+            "/usr/bin/google-chrome-stable",  # Standard Chrome installation
+            "/usr/bin/google-chrome",         # Alternative path
+            "/usr/bin/chromium-browser",      # Chromium browser
+            "/usr/bin/chromium"               # Another Chromium path
+        ]
+        
+        browser = None
+        for chrome_path in chrome_paths:
+            try:
+                browser = st.session_state.playwright.chromium.launch(
+                    headless=True,
+                    executable_path=chrome_path,
+                    args=browser_args
+                )
+                st.session_state.browser = browser
+                st.session_state.page = browser.new_page()
+                st.success(f"Browser initialized with {chrome_path}")
+                return True
+            except Exception as e:
+                st.warning(f"Failed with {chrome_path}: {str(e)}")
+                continue
+        
+        # If all else fails, try without specifying executable path
+        try:
+            browser = st.session_state.playwright.chromium.launch(
                 headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--single-process'
-                ]
+                args=browser_args
             )
-            st.session_state.page = st.session_state.browser.new_page()
+            st.session_state.browser = browser
+            st.session_state.page = browser.new_page()
+            st.success("Browser initialized with default path")
             return True
         except Exception as e:
-            st.error(f"Failed to initialize browser: {str(e)}")
+            st.error(f"All browser initialization attempts failed: {str(e)}")
             return False
-
-
+            
+    except Exception as e:
+        st.error(f"Failed to initialize Playwright: {str(e)}")
+        return False
 
 def logout():
     """Clean up browser and session state"""
