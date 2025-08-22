@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libatspi2.0-0 \
     libharfbuzz0b \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -29,7 +30,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers
+# Install Playwright browsers to a specific directory
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
 RUN playwright install chromium
 
 # Copy application code
@@ -39,7 +41,7 @@ COPY . .
 EXPOSE 8501
 
 # Health check
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 # Run the application
 ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
