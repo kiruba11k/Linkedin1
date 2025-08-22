@@ -40,8 +40,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright but don't use its browser
-RUN pip install playwright
+# Install Playwright and its browsers
+RUN playwright install --with-deps chromium
 
 # Copy your application code
 COPY . /app
