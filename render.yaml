@@ -1,12 +1,9 @@
 services:
   - type: web
     name: linkedin-message-sender
-    env: python
+    env: docker
     plan: free
-    buildCommand: |
-      pip install -r requirements.txt
-      playwright install chromium
-    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+    dockerfilePath: Dockerfile
     envVars:
       - key: LINKEDIN_EMAIL
         fromSecret: LINKEDIN_EMAIL
