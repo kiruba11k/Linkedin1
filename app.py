@@ -20,32 +20,48 @@ st.set_page_config(
 
 # Install Playwright browsers if not already installed
 def install_playwright_browsers():
-    """Install Playwright browsers if not already present"""
+    """Install Playwright browsers and dependencies"""
     try:
-        # Check if browsers are already installed
-        with sync_playwright() as p:
-            # This will fail if browsers aren't installed
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-        return True
-    except:
-        # Install browsers
-        st.info("Installing Playwright browsers. This may take a few minutes...")
+        # Install browsers with system dependencies
+        st.info("Installing Playwright dependencies. This may take a few minutes...")
+        
+        # Install Playwright with the Python package
         result = subprocess.run([
             sys.executable, 
             "-m", 
             "playwright", 
             "install", 
-            "chromium"
-        ], capture_output=True, text=True)
+            "chromium",
+            "--with-deps"
+        ], capture_output=True, text=True, timeout=300)
         
         if result.returncode == 0:
-            st.success("Playwright browsers installed successfully!")
+            st.success("Playwright installed successfully!")
             return True
         else:
-            st.error(f"Failed to install browsers: {result.stderr}")
-            return False
-
+            # Fallback to regular installation if with-deps fails
+            st.warning("Trying alternative installation method...")
+            result = subprocess.run([
+                sys.executable, 
+                "-m", 
+                "playwright", 
+                "install", 
+                "chromium"
+            ], capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                st.success("Playwright browsers installed successfully!")
+                return True
+            else:
+                st.error(f"Failed to install browsers: {result.stderr}")
+                return False
+                
+    except subprocess.TimeoutExpired:
+        st.error("Installation timed out. Please try again.")
+        return False
+    except Exception as e:
+        st.error(f"Installation failed: {str(e)}")
+        return False
 # Define the state
 class AgentState(dict):
     def __init__(self, linkedin_url, message, status="", result=""):
@@ -240,6 +256,12 @@ def create_workflow():
 
 # Initialize session state
 def init_session_state():
+    
+    if 'browsers_installed' not in st.session_state:
+    # Just try to install without complex checks
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], capture_output=True)
+        st.session_state.browsers_installed = True
+    
     if 'email' not in st.session_state:
         # Get email from secrets or environment variable
         if 'LINKEDIN_EMAIL' in st.secrets:
@@ -307,16 +329,16 @@ def sidebar():
         
  
         
-    
-
+# Replace your browser initialization with this
 def initialize_browser():
     """Initialize the browser instance"""
     if st.session_state.browser is None and st.session_state.browsers_installed:
         try:
             st.session_state.playwright = sync_playwright().start()
-            # Use headless mode for cloud deployment
+            # Use the system's chromium instead of Playwright's
             st.session_state.browser = st.session_state.playwright.chromium.launch(
                 headless=True,
+                executable_path="/usr/bin/chromium",
                 args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -330,7 +352,13 @@ def initialize_browser():
             st.session_state.page = st.session_state.browser.new_page()
         except Exception as e:
             st.error(f"Failed to initialize browser: {str(e)}")
-
+            # Fallback to Playwright's chromium
+            try:
+                st.session_state.browser = st.session_state.playwright.chromium.launch(headless=True)
+                st.session_state.page = st.session_state.browser.new_page()
+            except Exception as e2:
+                st.error(f"Fallback also failed: {str(e2)}")
+                
 def logout():
     """Clean up browser and session state"""
     if st.session_state.browser:
@@ -355,18 +383,8 @@ def main_interface():
     
     # Check if credentials are available
     if not st.session_state.email or not st.session_state.password:
-        st.error("LinkedIn credentials not found. Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in Streamlit secrets.")
-        st.info("""
-        To set up secrets:
-        1. Go to your app in Streamlit Cloud
-        2. Click on the three dots (⋮) next to the app
-        3. Select "Settings" → "Secrets"
-        4. Add your credentials:
-        ```
-        LINKEDIN_EMAIL = "your_email@example.com"
-        LINKEDIN_PASSWORD = "your_password"
-        ```
-        """)
+        st.error("LinkedIn credentials not found.")
+
         return
     
     # Input area for profiles and messages
