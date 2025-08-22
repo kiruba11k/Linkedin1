@@ -18,50 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Install Playwright browsers if not already installed
-# def install_playwright_browsers():
-#     """Install Playwright browsers and dependencies"""
-#     try:
-#         # Install browsers with system dependencies
-#         st.info("Installing Playwright dependencies. This may take a few minutes...")
-        
-#         # Install Playwright with the Python package
-#         result = subprocess.run([
-#             sys.executable, 
-#             "-m", 
-#             "playwright", 
-#             "install", 
-#             "chromium",
-#             "--with-deps"
-#         ], capture_output=True, text=True, timeout=300)
-        
-#         if result.returncode == 0:
-#             st.success("Playwright installed successfully!")
-#             return True
-#         else:
-#             # Fallback to regular installation if with-deps fails
-#             st.warning("Trying alternative installation method...")
-#             result = subprocess.run([
-#                 sys.executable, 
-#                 "-m", 
-#                 "playwright", 
-#                 "install", 
-#                 "chromium"
-#             ], capture_output=True, text=True, timeout=300)
-            
-#             if result.returncode == 0:
-#                 st.success("Playwright browsers installed successfully!")
-#                 return True
-#             else:
-#                 st.error(f"Failed to install browsers: {result.stderr}")
-#                 return False
-                
-#     except subprocess.TimeoutExpired:
-#         st.error("Installation timed out. Please try again.")
-#         return False
-#     except Exception as e:
-#         st.error(f"Installation failed: {str(e)}")
-#         return False
 # Define the state
 class AgentState(dict):
     def __init__(self, linkedin_url, message, status="", result=""):
@@ -312,11 +268,6 @@ def init_session_state():
         st.session_state.results = []
     if 'processing' not in st.session_state:
         st.session_state.processing = False
-    if 'browsers_installed' not in st.session_state:
-        # Set to True because we'll install browsers in the Render build step
-        st.session_state.browsers_installed = True
-
-    # Remove browsers_installed check as it's handled by Docker
 
 # UI Components
 def sidebar():
@@ -331,7 +282,7 @@ def sidebar():
         credentials_available = st.session_state.email and st.session_state.password
         
         if credentials_available:
-            st.success(" Credentials loaded from secrets")
+            st.success(" Credentials loaded from environment variables")
             
             if st.button("Login to LinkedIn"):
                 with st.spinner("Initializing browser..."):
@@ -345,15 +296,13 @@ def sidebar():
                         st.error("Browser initialization failed")
         else:
             st.error(" Credentials not found")
-            st.info("Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in Streamlit secrets")
+            st.info("Please set LINKEDIN_EMAIL and LINKEDIN_PASSWORD as environment variables")
         
         if st.session_state.logged_in:
             st.success(" Logged in to LinkedIn")
             if st.button("Logout"):
                 logout()        
- 
-        
-# Replace your browser initialization with this
+
 def initialize_browser():
     """Initialize the browser instance with proper path handling"""
     try:
@@ -361,7 +310,7 @@ def initialize_browser():
         if st.session_state.playwright is None:
             st.session_state.playwright = sync_playwright().start()
         
-        # Try to find the browser executable
+        # Browser launch arguments for server environment
         browser_args = [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -373,38 +322,11 @@ def initialize_browser():
             '--single-process'
         ]
         
-        # Try multiple approaches to launch the browser
-        try:
-            # First try: Use Playwright's built-in browser
-            st.session_state.browser = st.session_state.playwright.chromium.launch(
-                headless=True,
-                args=browser_args
-            )
-        except Exception as e:
-            st.warning(f"First attempt failed: {str(e)}")
-            
-            # Second try: Manually install browser and try again
-            try:
-                st.info("Attempting to install browser...")
-                import subprocess
-                result = subprocess.run([
-                    sys.executable, 
-                    "-m", 
-                    "playwright", 
-                    "install", 
-                    "chromium"
-                ], capture_output=True, text=True, timeout=300)
-                
-                if result.returncode == 0:
-                    st.session_state.browser = st.session_state.playwright.chromium.launch(
-                        headless=True,
-                        args=browser_args
-                    )
-                else:
-                    raise Exception(f"Browser installation failed: {result.stderr}")
-            except Exception as install_error:
-                st.error(f"Browser installation also failed: {str(install_error)}")
-                return False
+        # Launch browser
+        st.session_state.browser = st.session_state.playwright.chromium.launch(
+            headless=True,
+            args=browser_args
+        )
         
         # Create a new page
         st.session_state.page = st.session_state.browser.new_page()
@@ -412,19 +334,6 @@ def initialize_browser():
         
     except Exception as e:
         st.error(f"Failed to initialize browser: {str(e)}")
-        return False
-
-
-def check_browser_installation():
-    """Check if browser is properly installed"""
-    try:
-        # Try to launch browser to check installation
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-        return True
-    except Exception as e:
-        st.error(f"Browser check failed: {str(e)}")
         return False
 
 def logout():
@@ -443,11 +352,6 @@ def logout():
 def main_interface():
     """Main content area"""
     st.header("LinkedIn Message Sender")
-    
-    # Check if browsers are installed
-    # if not st.session_state.browsers_installed:
-    #     st.error("Playwright browsers could not be installed. Please check the logs.")
-    #     return
     
     # Check if credentials are available
     if not st.session_state.email or not st.session_state.password:
@@ -574,46 +478,15 @@ def process_messages():
     st.session_state.processing = False
     st.success("All messages processed!")
 
-
-def debug_browser_installation():
-    """Debug function to check browser installation"""
-    try:
-        # Check if Playwright browsers are installed
-        result = subprocess.run([
-            sys.executable, 
-            "-m", 
-            "playwright",
-            "install",
-            "--dry-run",
-            "chromium"
-        ], capture_output=True, text=True)
-        
-        st.write("Playwright browser check:", result.stdout)
-        
-        # Try to list browser executables
-        try:
-            from playwright._impl._driver import compute_driver_executable
-            driver_path = compute_driver_executable()
-            st.write(f"Driver path: {driver_path}")
-        except Exception as e:
-            st.write(f"Could not get driver path: {e}")
-            
-    except Exception as e:
-        st.write(f"Debug failed: {e}")
 # Main app
 def main():
     init_session_state()
-    
-    # Check browser installation
-    if not check_browser_installation():
-        st.error("Browser is not properly installed. Please check your Docker setup.")
-        return
-    
     sidebar()
     
     if not st.session_state.logged_in and st.session_state.email and st.session_state.password:
         st.info("Click 'Login to LinkedIn' in the sidebar to get started.")
     
     main_interface()
+
 if __name__ == "__main__":
     main()
