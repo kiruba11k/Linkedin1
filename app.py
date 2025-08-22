@@ -289,25 +289,17 @@ def create_workflow():
 
     return workflow.compile()
 
+
 def init_session_state():
+    # Email
     if 'email' not in st.session_state:
-        # Get email from secrets or environment variable
-        if 'LINKEDIN_EMAIL' in st.secrets:
-            st.session_state.email = st.secrets['LINKEDIN_EMAIL']
-        elif 'LINKEDIN_EMAIL' in os.environ:
-            st.session_state.email = os.environ['LINKEDIN_EMAIL']
-        else:
-            st.session_state.email = ""
-    
+        st.session_state.email = os.getenv("LINKEDIN_EMAIL", "")
+
+    # Password
     if 'password' not in st.session_state:
-        # Get password from secrets or environment variable
-        if 'LINKEDIN_PASSWORD' in st.secrets:
-            st.session_state.password = st.secrets['LINKEDIN_PASSWORD']
-        elif 'LINKEDIN_PASSWORD' in os.environ:
-            st.session_state.password = os.environ['LINKEDIN_PASSWORD']
-        else:
-            st.session_state.password = ""
-            
+        st.session_state.password = os.getenv("LINKEDIN_PASSWORD", "")
+
+    # Other session states
     if 'page' not in st.session_state:
         st.session_state.page = None
     if 'browser' not in st.session_state:
@@ -321,8 +313,9 @@ def init_session_state():
     if 'processing' not in st.session_state:
         st.session_state.processing = False
     if 'browsers_installed' not in st.session_state:
-        # Set to True since we're using Docker which handles browser installation
+        # Set to True because we'll install browsers in the Render build step
         st.session_state.browsers_installed = True
+
     # Remove browsers_installed check as it's handled by Docker
 
 # UI Components
