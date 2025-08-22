@@ -18,6 +18,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Set Playwright browser path for Render
+os.environ['PLAYWRIGHT_BROWSERS_PATH'] = os.getcwd() + '/ms-playwright'
+
 # Define the state
 class AgentState(dict):
     def __init__(self, linkedin_url, message, status="", result=""):
@@ -319,14 +322,45 @@ def initialize_browser():
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            '--single-process'
+            '--single-process',
+            '--headless'
         ]
         
+        # Launch browser with explicit executable path
+        browser_executable_path = None
+        try:
+            # Try to find the browser executable
+            possible_paths = [
+                os.getcwd() + '/ms-playwright/chromium-*/chrome-linux/chrome',
+                os.getenv('PLAYWRIGHT_BROWSERS_PATH', '') + '/chromium-*/chrome-linux/chrome',
+                '/usr/bin/chromium',
+                '/usr/bin/chromium-browser',
+                '/usr/bin/google-chrome',
+                '/usr/bin/google-chrome-stable'
+            ]
+            
+            for path_pattern in possible_paths:
+                import glob
+                matches = glob.glob(path_pattern)
+                if matches:
+                    browser_executable_path = matches[0]
+                    break
+        except:
+            pass
+        
         # Launch browser
-        st.session_state.browser = st.session_state.playwright.chromium.launch(
-            headless=True,
-            args=browser_args
-        )
+        if browser_executable_path and os.path.exists(browser_executable_path):
+            st.session_state.browser = st.session_state.playwright.chromium.launch(
+                executable_path=browser_executable_path,
+                headless=True,
+                args=browser_args
+            )
+        else:
+            # Fallback to default launch
+            st.session_state.browser = st.session_state.playwright.chromium.launch(
+                headless=True,
+                args=browser_args
+            )
         
         # Create a new page
         st.session_state.page = st.session_state.browser.new_page()
@@ -334,6 +368,24 @@ def initialize_browser():
         
     except Exception as e:
         st.error(f"Failed to initialize browser: {str(e)}")
+        # Try to install browsers if they're missing
+        try:
+            import subprocess
+            result = subprocess.run([
+                sys.executable, 
+                "-m", 
+                "playwright", 
+                "install", 
+                "chromium"
+            ], capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                st.info("Browsers installed, please try again.")
+            else:
+                st.error(f"Browser installation failed: {result.stderr}")
+        except Exception as install_error:
+            st.error(f"Browser installation also failed: {str(install_error)}")
+        
         return False
 
 def logout():
