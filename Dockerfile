@@ -40,8 +40,11 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and its browsers
-RUN playwright install --with-deps chromium
+# Install Playwright and its browsers with explicit path
+RUN python -m playwright install --with-deps chromium
+
+# Set environment variable to point to the installed browser
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Copy your application code
 COPY . /app
