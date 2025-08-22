@@ -335,10 +335,10 @@ def initialize_browser():
     if st.session_state.browser is None and st.session_state.browsers_installed:
         try:
             st.session_state.playwright = sync_playwright().start()
-            # Use the system's chromium instead of Playwright's
+            
+            # Use Playwright's Chromium
             st.session_state.browser = st.session_state.playwright.chromium.launch(
                 headless=True,
-                executable_path="/usr/bin/chromium",
                 args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -346,19 +346,18 @@ def initialize_browser():
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-gpu'
+                    '--disable-gpu',
+                    '--single-process'
                 ]
             )
             st.session_state.page = st.session_state.browser.new_page()
+            return True
         except Exception as e:
             st.error(f"Failed to initialize browser: {str(e)}")
-            # Fallback to Playwright's chromium
-            try:
-                st.session_state.browser = st.session_state.playwright.chromium.launch(headless=True)
-                st.session_state.page = st.session_state.browser.new_page()
-            except Exception as e2:
-                st.error(f"Fallback also failed: {str(e2)}")
-                
+            return False
+
+
+
 def logout():
     """Clean up browser and session state"""
     if st.session_state.browser:
