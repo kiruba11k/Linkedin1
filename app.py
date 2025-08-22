@@ -289,7 +289,6 @@ def create_workflow():
 
     return workflow.compile()
 
-# Initialize session state
 def init_session_state():
     if 'email' not in st.session_state:
         # Get email from secrets or environment variable
@@ -321,6 +320,9 @@ def init_session_state():
         st.session_state.results = []
     if 'processing' not in st.session_state:
         st.session_state.processing = False
+    if 'browsers_installed' not in st.session_state:
+        # Set to True since we're using Docker which handles browser installation
+        st.session_state.browsers_installed = True
     # Remove browsers_installed check as it's handled by Docker
 
 # UI Components
@@ -404,14 +406,13 @@ def main_interface():
     st.header("LinkedIn Message Sender")
     
     # Check if browsers are installed
-    if not st.session_state.browsers_installed:
-        st.error("Playwright browsers could not be installed. Please check the logs.")
-        return
+    # if not st.session_state.browsers_installed:
+    #     st.error("Playwright browsers could not be installed. Please check the logs.")
+    #     return
     
     # Check if credentials are available
     if not st.session_state.email or not st.session_state.password:
         st.error("LinkedIn credentials not found.")
-
         return
     
     # Input area for profiles and messages
