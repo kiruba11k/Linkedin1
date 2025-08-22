@@ -3,5 +3,12 @@ services:
     name: linkedin-message-sender
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && playwright install --with-deps chromium
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    buildCommand: |
+      pip install -r requirements.txt
+      playwright install chromium
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+    envVars:
+      - key: LINKEDIN_EMAIL
+        fromSecret: LINKEDIN_EMAIL
+      - key: LINKEDIN_PASSWORD
+        fromSecret: LINKEDIN_PASSWORD
