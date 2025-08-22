@@ -1,4 +1,5 @@
-playwright
 streamlit
 pandas
+requests
+beautifulsoup
 langgraph
